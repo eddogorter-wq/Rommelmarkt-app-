@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the platform",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "phone": { "type": "string", "description": "User's phone number" },
+        "city": { "type": "string", "description": "City for location" },
+        "zipCode": { "type": "string", "description": "Postal code" },
+        "bio": { "type": "string", "description": "Short description about the seller" },
+        "deliveryPreference": { "type": "string", "enum": ["pickup", "shipping", "both"], "description": "Preferred delivery method" },
+        "createdAt": { "type": "string" },
+        "subscriptionId": { "type": "string", "description": "Active subscription ID if any" },
+        "trialEndsAt": { "type": "string", "description": "When the 1-month free trial ends" },
+        "referralCode": { "type": "string" }
+      },
+      "required": ["createdAt", "referralCode"]
+    },
+    "Listing": {
+      "title": "Listing",
+      "description": "A product for sale",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner of the listing" },
+        "title": { "type": "string", "description": "SEO friendly title" },
+        "description": { "type": "string", "description": "3-line generated description" },
+        "price": { "type": "number", "description": "Asking price" },
+        "bottomPrice": { "type": "number", "description": "Hidden bottom price" },
+        "marketValue": { "type": "number", "description": "Estimated market value" },
+        "imageUrl": { "type": "string", "description": "URL to the product image" },
+        "images": { "type": "array", "items": { "type": "string" }, "description": "All images for this listing" },
+        "category": { "type": "string", "description": "Item category" },
+        "location": { 
+          "type": "object", 
+          "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } },
+          "description": "Geolocation"
+        },
+        "status": { "type": "string", "enum": ["active", "closed"], "description": "Listing status" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "slug": { "type": "string", "description": "SEO friendly slug" },
+        "currency": { "type": "string" },
+        "language": { "type": "string" }
+      },
+      "required": ["userId", "title", "description", "price", "bottomPrice", "status", "createdAt", "slug"]
+    },
+    "ChatRoom": {
+      "title": "ChatRoom",
+      "description": "Conversation between buyer and seller's AI",
+      "type": "object",
+      "properties": {
+        "listingId": { "type": "string" },
+        "buyerId": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "createdAt": { "type": "string" },
+        "agreedPrice": { "type": "number", "description": "If deal is closed" }
+      },
+      "required": ["listingId", "buyerId", "sellerId", "status", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A message in a chat room",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "senderId": { "type": "string", "description": "User ID or 'AI'" },
+        "role": { "type": "string", "enum": ["buyer", "seller_ai"] },
+        "content": { "type": "string" },
+        "offerAmount": { "type": "number", "description": "If the message contains an offer" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["roomId", "senderId", "role", "content", "createdAt"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "A user's favorite setting for a listing",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "listingId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "listingId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Users collection"
+    },
+    "listings/{listingId}": {
+      "schema": { "$ref": "Listing" },
+      "description": "Listings collection"
+    },
+    "likes/{likeId}": {
+      "schema": { "$ref": "Like" },
+      "description": "Likes on listings"
+    },
+    "rooms/{roomId}": {
+      "schema": { "$ref": "ChatRoom" },
+      "description": "Chat rooms for negotiation"
+    },
+    "rooms/{roomId}/messages/{messageId}": {
+      "schema": { "$ref": "Message" },
+      "description": "Messages within a chat room"
+    }
+  }
+}

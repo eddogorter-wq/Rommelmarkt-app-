@@ -1,0 +1,6 @@
+{
+  "name": "Sell & Scan",
+  "description": "Scan items and sell them with an AI negotiator.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": []
+}

@@ -1,0 +1,193 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['createdAt', 'referralCode'])
+        && data.createdAt == request.time
+        && data.referralCode is string && data.referralCode.size() <= 64
+        && data.keys().size() <= 12 // max fields
+        // Optionals
+        && (data.get('email', '') is string)
+        && (data.get('displayName', '') is string)
+        && (data.get('subscriptionId', '') is string)
+        && (data.get('trialEndsAt', '') is string)
+        && (data.get('phone', '') is string)
+        && (data.get('city', '') is string)
+        && (data.get('zipCode', '') is string)
+        && (data.get('bio', '') is string)
+        && (data.get('deliveryPreference', '') is string);
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false; // No blanket reads
+
+      allow create: if isSignedIn() 
+        && isValidId(userId) 
+        && request.auth.uid == userId 
+        && isValidUser(incoming());
+
+      allow update: if isSignedIn() 
+        && isValidId(userId) 
+        && request.auth.uid == userId 
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'subscriptionId', 'phone', 'city', 'zipCode', 'bio', 'deliveryPreference'])
+        && (incoming().get('displayName', '') is string)
+        && (incoming().get('subscriptionId', '') is string)
+        && (incoming().get('phone', '') is string)
+        && (incoming().get('city', '') is string)
+        && (incoming().get('zipCode', '') is string)
+        && (incoming().get('bio', '') is string)
+        && (incoming().get('deliveryPreference', 'both') in ['pickup', 'shipping', 'both'])
+        && incoming().createdAt == existing().createdAt
+        && incoming().referralCode == existing().referralCode;
+    }
+
+    function isValidListing(data) {
+      return data.keys().hasAll(['userId', 'title', 'description', 'price', 'bottomPrice', 'status', 'createdAt', 'slug'])
+        && data.userId == request.auth.uid
+        && data.title is string && data.title.size() <= 1000
+        && data.description is string && data.description.size() <= 10000
+        && data.price is number && data.price >= 0
+        && data.bottomPrice is number && data.bottomPrice >= 0
+        && data.status in ['active', 'closed']
+        && data.createdAt == request.time
+        && data.slug is string && data.slug.size() <= 200
+        && data.keys().size() <= 16 // incl optional fields
+        && (data.get('marketValue', 0) is number)
+        && (data.get('imageUrl', '') is string)
+        && (data.get('images', []) is list && data.get('images', []).size() <= 10)
+        && (data.get('category', '') is string && data.get('category', '').size() <= 100)
+        && (data.get('currency', 'EUR') is string)
+        && (data.get('language', 'nl') is string)
+        && (data.get('location', {}) is map);
+    }
+
+    match /listings/{listingId} {
+      allow get: if existing().status == 'active' || isSignedIn();
+      allow list: if true;
+
+      allow create: if isSignedIn() 
+        && isValidId(listingId)
+        && isValidListing(incoming());
+
+      allow update: if isSignedIn() 
+        && isValidId(listingId) 
+        && existing().userId == request.auth.uid
+        && existing().status == 'active' // terminal state lock
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'title', 'description', 'price', 'bottomPrice', 'imageUrl', 'images', 'category', 'location', 'currency', 'language'])
+        && (incoming().get('status', 'active') in ['active', 'closed'])
+        && (incoming().get('title', '') is string && incoming().get('title', '').size() <= 1000)
+        && (incoming().get('description', '') is string && incoming().get('description', '').size() <= 10000)
+        && (incoming().get('price', 0) is number && incoming().get('price', 0) >= 0)
+        && (incoming().get('bottomPrice', 0) is number && incoming().get('bottomPrice', 0) >= 0)
+        && (incoming().get('imageUrl', '') is string)
+        && (incoming().get('images', []) is list)
+        && (incoming().get('category', '') is string)
+        && (incoming().get('location', {}) is map)
+        && (incoming().get('currency', '') is string)
+        && (incoming().get('language', '') is string)
+        && incoming().createdAt == existing().createdAt
+        && incoming().userId == existing().userId
+        && incoming().slug == existing().slug;
+
+      allow delete: if isSignedIn() 
+        && isValidId(listingId)
+        && existing().userId == request.auth.uid;
+    }
+
+    function isValidLike(data) {
+      return data.keys().hasAll(['userId', 'listingId', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.listingId is string && data.listingId.size() <= 128
+        && data.createdAt == request.time
+        && data.keys().size() <= 3;
+    }
+
+    match /likes/{likeId} {
+      allow get: if isSignedIn() && isValidId(likeId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn()
+        && isValidId(likeId)
+        && isValidLike(incoming())
+        && exists(/databases/$(database)/documents/listings/$(incoming().listingId));
+        
+      allow delete: if isSignedIn()
+        && isValidId(likeId)
+        && existing().userId == request.auth.uid;
+    }
+
+    function isValidRoom(data) {
+      return data.keys().hasAll(['listingId', 'buyerId', 'sellerId', 'status', 'createdAt'])
+        && data.buyerId == request.auth.uid
+        && data.buyerId != data.sellerId // Can't chat with self
+        && data.status in ['open', 'closed']
+        && data.createdAt == request.time
+        && data.listingId is string && data.listingId.size() <= 128
+        && data.sellerId is string && data.sellerId.size() <= 128
+        && data.keys().size() <= 6
+        && (data.get('agreedPrice', 0) is number);
+    }
+
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) 
+        && (existing().buyerId == request.auth.uid || existing().sellerId == request.auth.uid);
+      
+      allow list: if isSignedIn() 
+        && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid);
+
+      allow create: if isSignedIn() 
+        && isValidId(roomId)
+        && isValidRoom(incoming())
+        && exists(/databases/$(database)/documents/listings/$(incoming().listingId));
+
+      allow update: if isSignedIn() 
+        && isValidId(roomId) 
+        && (existing().buyerId == request.auth.uid || existing().sellerId == request.auth.uid)
+        && existing().status == 'open'
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'agreedPrice'])
+        && (incoming().get('status', 'open') in ['open', 'closed'])
+        && (incoming().get('agreedPrice', 0) is number)
+        && incoming().createdAt == existing().createdAt
+        && incoming().buyerId == existing().buyerId
+        && incoming().sellerId == existing().sellerId
+        && incoming().listingId == existing().listingId;
+    }
+
+    function isValidMessage(data, roomData) {
+      return data.keys().hasAll(['roomId', 'senderId', 'role', 'content', 'createdAt'])
+        && data.roomId is string && data.roomId.size() <= 128
+        && data.senderId is string && data.senderId.size() <= 128
+        && data.role in ['buyer', 'seller_ai']
+        && data.content is string && data.content.size() <= 2000
+        && data.createdAt == request.time
+        && data.keys().size() <= 6
+        && (data.get('offerAmount', 0) is number)
+        // If buyer, senderId must match auth.uid and role must be buyer
+        // If AI, senderId could be AI placeholder and role must be seller_ai
+        && (
+            (data.senderId == request.auth.uid && data.role == 'buyer' && request.auth.uid == roomData.buyerId) ||
+            (data.role == 'seller_ai' && (request.auth.uid == roomData.sellerId || request.auth.uid == roomData.buyerId)) // Allow buyer to emulate AI for MVP
+        );
+    }
+
+    match /rooms/{roomId}/messages/{messageId} {
+      allow read: if isSignedIn() && isValidId(roomId) && isValidId(messageId)
+        && (get(/databases/$(database)/documents/rooms/$(roomId)).data.buyerId == request.auth.uid 
+            || get(/databases/$(database)/documents/rooms/$(roomId)).data.sellerId == request.auth.uid);
+
+      allow create: if isSignedIn() && isValidId(roomId) && isValidId(messageId)
+        && isValidMessage(incoming(), get(/databases/$(database)/documents/rooms/$(roomId)).data)
+        && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'open'; // terminal lock on room
+    }
+  }
+}
