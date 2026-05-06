@@ -10,14 +10,15 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
-let messaging: ReturnType<typeof getMessaging> | null = null;
-isSupported().then((supported) => {
+export const getMessagingInstance = async () => {
+  const supported = await isSupported();
   if (supported) {
-    messaging = getMessaging(app);
+    return getMessaging(app);
   }
-});
+  return null;
+};
 
-export { messaging, getToken, onMessage };
+export { getToken, onMessage };
 
 
 export enum OperationType {

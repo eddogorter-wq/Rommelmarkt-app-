@@ -18,27 +18,34 @@ import Landing from './pages/Landing';
 import Favorites from './pages/Favorites';
 import SellerProfile from './pages/SellerProfile';
 import { AuthProvider } from './lib/AuthContext';
-import { messaging, onMessage } from './lib/firebase';
+import { getMessagingInstance, onMessage } from './lib/firebase';
 
 export default function App() {
   useEffect(() => {
-    if (messaging) {
-      const unsubscribe = onMessage(messaging, (payload) => {
-        console.log('Message received. ', payload);
-        if (payload.notification) {
-          // If we want a simple browser alert or native notification:
-          if (Notification.permission === 'granted') {
-            new Notification(payload.notification.title || 'Nieuwe melding', {
-              body: payload.notification.body,
-              icon: '/vite.svg'
-            });
-          } else {
-            alert(`${payload.notification.title}\n${payload.notification.body}`);
+    let unsubscribe: (() => void) | undefined;
+    getMessagingInstance().then((messaging) => {
+      if (messaging) {
+        unsubscribe = onMessage(messaging, (payload) => {
+          console.log('Message received. ', payload);
+          if (payload.notification) {
+            if (Notification.permission === 'granted') {
+              new Notification(payload.notification.title || 'Nieuwe melding', {
+                body: payload.notification.body,
+                icon: '/vite.svg'
+              });
+            } else {
+              alert(`${payload.notification.title}\n${payload.notification.body}`);
+            }
           }
-        }
-      });
-      return () => unsubscribe();
-    }
+        });
+      }
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   return (

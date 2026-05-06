@@ -5,7 +5,7 @@ import { LogOut, Copy, Globe, ShieldCheck, Trash2, Edit2, X, Heart, Settings, Be
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, limit, deleteDoc, doc, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
-import { db, messaging, getToken, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, getMessagingInstance, getToken, handleFirestoreError, OperationType } from '../lib/firebase';
 
 export default function Profile() {
   const { user, signInWithGoogle, logout } = useAuth();
@@ -36,7 +36,12 @@ export default function Profile() {
   }, []);
 
   const handleEnableNotifications = async () => {
-    if (!messaging || !user) {
+    if (!user) {
+      alert('Log in om notificaties in te schakelen.');
+      return;
+    }
+    const messaging = await getMessagingInstance();
+    if (!messaging) {
       alert('Push notificaties worden niet ondersteund in deze browser.');
       return;
     }
