@@ -175,7 +175,7 @@ export default function ScanUpload() {
 
       const listingsRef = collection(db, 'listings');
       for (const p of products) {
-        const slug = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const slug = (p.title || 'item').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 199);
         
         // Upload images to Firebase Storage
         const itemImageUrls: string[] = [];
@@ -204,14 +204,14 @@ export default function ScanUpload() {
         
         const newListing = {
           userId: user.uid,
-          title: p.title,
-          description: p.description,
-          price: Number(p.price),
-          bottomPrice: Number(p.bottomPrice),
-          category: p.category || 'Overig',
-          marketValue: Number(p.price),
+          title: String(p.title || 'Product').slice(0, 999),
+          description: String(p.description || '').slice(0, 9999),
+          price: Number(p.price) || 0,
+          bottomPrice: Number(p.bottomPrice) || 0,
+          category: String(p.category || 'Overig').slice(0, 99),
+          marketValue: Number(p.price) || 0,
           imageUrl: mainImage,
-          images: itemImageUrls.length > 0 ? itemImageUrls : [mainImage],
+          images: itemImageUrls.length > 0 ? itemImageUrls.slice(0, 10) : [mainImage],
           status: 'active',
           createdAt: serverTimestamp(),
           slug: slug,
@@ -225,12 +225,19 @@ export default function ScanUpload() {
       
       navigate('/app/profiel');
     } catch (error: any) {
+      console.error("Opslaan mislukt:", error);
+      alert("Er ging iets mis bij het opslaan: " + (error.message || "Onbekende fout"));
+      
       const isStorage = error?.message?.includes('Firebase Storage');
-      handleFirestoreError(
-        error, 
-        isStorage ? OperationType.WRITE : OperationType.CREATE, 
-        isStorage ? `storage/${user.uid}` : 'listings'
-      );
+      try {
+        handleFirestoreError(
+          error, 
+          isStorage ? OperationType.WRITE : OperationType.CREATE, 
+          isStorage ? `storage/${user?.uid}` : 'listings'
+        );
+      } catch (e) {
+        // Already logged by handleFirestoreError, we swallow it here so we don't crash the click handler
+      }
     } finally {
       setAnalyzing(false);
     }
